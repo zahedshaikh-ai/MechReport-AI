@@ -29,6 +29,31 @@ const TABLE_COLUMNS: ColumnDef[] = [
   { key: 'right_tol', minX: 545, maxX: 575 },
 ];
 
+export function toNumericMeasurement(val: any): number | null {
+  if (val === null || val === undefined || val === '') return null;
+  if (typeof val === 'number') return isNaN(val) ? null : val;
+  if (Array.isArray(val)) {
+    if (val.length === 0) return null;
+    return toNumericMeasurement(val[0]);
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (
+      trimmed === '' ||
+      trimmed === '-' ||
+      trimmed === '/' ||
+      trimmed === '...' ||
+      trimmed === '—'
+    ) {
+      return null;
+    }
+    const cleaned = trimmed.replace(/[\[\]\(\)\s"]/g, '');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? null : num;
+  }
+  return null;
+}
+
 export function extractMeasurementTable(items: ExtractedTextItem[]): {
   table: ExtractedMeasurementTable;
   warnings: string[];
@@ -37,16 +62,13 @@ export function extractMeasurementTable(items: ExtractedTextItem[]): {
   const teeth_numbers = ['33', '23', '12', '1'];
 
   const parseNum = (val: string): number | null => {
-    if (!val || val === '-' || val === '/' || val === '...') return null;
-    const clean = val.replace(/[^\d.-]/g, '');
-    const parsed = parseFloat(clean);
-    return isNaN(parsed) ? null : parsed;
+    return toNumericMeasurement(val);
   };
 
   // Helper to extract a single row's cell data
   const extractRowData = (minY: number, maxY: number) => {
     const rowItems = items.filter(
-      (i) => i.y >= minY && i.y <= maxY && i.x >= 140 && i.x <= 575
+      (i) => i.y >= minY && i.y <= maxY && i.x >= 140 && i.x <= 575 && i.str.trim().length > 0
     );
     const data: Record<string, number | number[] | null> = {};
 
@@ -54,16 +76,27 @@ export function extractMeasurementTable(items: ExtractedTextItem[]): {
       const matching = rowItems.filter(
         (i) => i.x >= col.minX && i.x <= col.maxX
       );
-      if (matching.length === 1) {
-        data[col.key] = parseNum(matching[0].str);
-      } else if (matching.length > 1) {
-        // e.g., upper and lower tolerances stacked vertically
-        const nums = matching
-          .map((m) => parseNum(m.str))
-          .filter((n): n is number => n !== null);
-        data[col.key] = nums.sort((a, b) => b - a); // [upper, lower]
+      const isToleranceCol = col.key === 'left_tol' || col.key === 'right_tol';
+
+      const nums = matching
+        .map((m) => toNumericMeasurement(m.str))
+        .filter((n): n is number => n !== null);
+
+      if (isToleranceCol) {
+        if (nums.length === 1) {
+          data[col.key] = nums[0];
+        } else if (nums.length > 1) {
+          data[col.key] = nums.sort((a, b) => b - a);
+        } else {
+          data[col.key] = null;
+        }
       } else {
-        data[col.key] = null;
+        // Measurement column: MUST ALWAYS be an individual number or null, NEVER an array
+        if (nums.length > 0) {
+          data[col.key] = nums[0];
+        } else {
+          data[col.key] = null;
+        }
       }
     }
     return data;
@@ -80,24 +113,24 @@ export function extractMeasurementTable(items: ExtractedTextItem[]): {
       qn: null,
       tol_upper: null,
       tol_lower: null,
-      avg: fpData.left_avg as number | null,
+      avg: toNumericMeasurement(fpData.left_avg),
       teeth: {
-        '33': fpData.left_t33 as number | null,
-        '23': fpData.left_t23 as number | null,
-        '12': fpData.left_t12 as number | null,
-        '1': fpData.left_t1 as number | null,
+        '33': toNumericMeasurement(fpData.left_t33),
+        '23': toNumericMeasurement(fpData.left_t23),
+        '12': toNumericMeasurement(fpData.left_t12),
+        '1': toNumericMeasurement(fpData.left_t1),
       },
       qa: null,
     },
     right: {
       qa: null,
       teeth: {
-        '1': fpData.right_t1 as number | null,
-        '12': fpData.right_t12 as number | null,
-        '23': fpData.right_t23 as number | null,
-        '33': fpData.right_t33 as number | null,
+        '1': toNumericMeasurement(fpData.right_t1),
+        '12': toNumericMeasurement(fpData.right_t12),
+        '23': toNumericMeasurement(fpData.right_t23),
+        '33': toNumericMeasurement(fpData.right_t33),
       },
-      avg: fpData.right_avg as number | null,
+      avg: toNumericMeasurement(fpData.right_avg),
       qn: null,
       tol_upper: null,
       tol_lower: null,
@@ -118,24 +151,24 @@ export function extractMeasurementTable(items: ExtractedTextItem[]): {
       qn: null,
       tol_upper: leftTolFfp,
       tol_lower: null,
-      avg: ffpData.left_avg as number | null,
+      avg: toNumericMeasurement(ffpData.left_avg),
       teeth: {
-        '33': ffpData.left_t33 as number | null,
-        '23': ffpData.left_t23 as number | null,
-        '12': ffpData.left_t12 as number | null,
-        '1': ffpData.left_t1 as number | null,
+        '33': toNumericMeasurement(ffpData.left_t33),
+        '23': toNumericMeasurement(ffpData.left_t23),
+        '12': toNumericMeasurement(ffpData.left_t12),
+        '1': toNumericMeasurement(ffpData.left_t1),
       },
       qa: null,
     },
     right: {
       qa: null,
       teeth: {
-        '1': ffpData.right_t1 as number | null,
-        '12': ffpData.right_t12 as number | null,
-        '23': ffpData.right_t23 as number | null,
-        '33': ffpData.right_t33 as number | null,
+        '1': toNumericMeasurement(ffpData.right_t1),
+        '12': toNumericMeasurement(ffpData.right_t12),
+        '23': toNumericMeasurement(ffpData.right_t23),
+        '33': toNumericMeasurement(ffpData.right_t33),
       },
-      avg: ffpData.right_avg as number | null,
+      avg: toNumericMeasurement(ffpData.right_avg),
       qn: null,
       tol_upper: rightTolFfp,
       tol_lower: null,
@@ -167,24 +200,24 @@ export function extractMeasurementTable(items: ExtractedTextItem[]): {
       qn: null,
       tol_upper: leftUpperFH,
       tol_lower: leftLowerFH,
-      avg: fHData.left_avg as number | null,
+      avg: toNumericMeasurement(fHData.left_avg),
       teeth: {
-        '33': fHData.left_t33 as number | null,
-        '23': fHData.left_t23 as number | null,
-        '12': fHData.left_t12 as number | null,
-        '1': fHData.left_t1 as number | null,
+        '33': toNumericMeasurement(fHData.left_t33),
+        '23': toNumericMeasurement(fHData.left_t23),
+        '12': toNumericMeasurement(fHData.left_t12),
+        '1': toNumericMeasurement(fHData.left_t1),
       },
       qa: null,
     },
     right: {
       qa: null,
       teeth: {
-        '1': fHData.right_t1 as number | null,
-        '12': fHData.right_t12 as number | null,
-        '23': fHData.right_t23 as number | null,
-        '33': fHData.right_t33 as number | null,
+        '1': toNumericMeasurement(fHData.right_t1),
+        '12': toNumericMeasurement(fHData.right_t12),
+        '23': toNumericMeasurement(fHData.right_t23),
+        '33': toNumericMeasurement(fHData.right_t33),
       },
-      avg: fHData.right_avg as number | null,
+      avg: toNumericMeasurement(fHData.right_avg),
       qn: null,
       tol_upper: rightUpperFH,
       tol_lower: rightLowerFH,
@@ -194,14 +227,14 @@ export function extractMeasurementTable(items: ExtractedTextItem[]): {
   // 4. vfHβ (Crowning deviation) ~ y: 48 to 56
   // Usually appears as two values near the center: one for left flank, one for right flank
   const vfLeftItem = items.find(
-    (i) => i.y >= 48 && i.y <= 56 && i.x >= 295 && i.x <= 340
+    (i) => i.y >= 48 && i.y <= 56 && i.x >= 295 && i.x <= 340 && i.str.trim().length > 0
   );
   const vfRightItem = items.find(
-    (i) => i.y >= 48 && i.y <= 56 && i.x >= 355 && i.x <= 400
+    (i) => i.y >= 48 && i.y <= 56 && i.x >= 355 && i.x <= 400 && i.str.trim().length > 0
   );
 
-  const leftCrowning = vfLeftItem ? parseNum(vfLeftItem.str) : null;
-  const rightCrowning = vfRightItem ? parseNum(vfRightItem.str) : null;
+  const leftCrowning = vfLeftItem ? toNumericMeasurement(vfLeftItem.str) : null;
+  const rightCrowning = vfRightItem ? toNumericMeasurement(vfRightItem.str) : null;
 
   const rowVfHbeta: MeasurementRow = {
     name: 'vfHbeta',
