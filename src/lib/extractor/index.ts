@@ -14,13 +14,19 @@ export async function processInspectionPdf(
 
   // Dynamic import of PDF.js to support both client-side and server-side execution
   // @ts-ignore
-  const pdfjsLib = await import('pdfjs-dist/build/pdf.js');
+  const rawPdfjs = await import('pdfjs-dist/build/pdf.js');
+  const pdfjsLib: any = (rawPdfjs as any).default || rawPdfjs;
 
-  if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+  if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
   }
 
-  const loadingTask = pdfjsLib.getDocument({
+  const getDocFn = pdfjsLib.getDocument || pdfjsLib.default?.getDocument;
+  if (!getDocFn) {
+    throw new Error('PDF.js getDocument function could not be resolved');
+  }
+
+  const loadingTask = getDocFn({
     data: uint8,
     useSystemFonts: true,
     disableFontFace: true,

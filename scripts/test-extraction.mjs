@@ -74,7 +74,10 @@ async function runRegressionSuite() {
 
   for (const sample of testFiles) {
     totalTests++;
-    const pdfPath = path.join(rootDir, sample.name);
+    let pdfPath = path.join(rootDir, 'public', 'reference-reports', sample.name);
+    if (!fs.existsSync(pdfPath)) {
+      pdfPath = path.join(rootDir, sample.name);
+    }
     if (!fs.existsSync(pdfPath)) {
       console.error(`[FAIL] File not found: ${pdfPath}`);
       continue;
